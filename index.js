@@ -1,12 +1,35 @@
 const express = require('express');
+const fs = require('fs');
+const path = require('path');
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-// Servidor web simple para que Render no tire error de puerto
+// Archivo JSON donde guardaremos las fechas
+const DATA_FILE = path.join(__dirname, 'fechas.json');
+
+// Función para cargar fechas
+function cargarFechas() {
+    if (!fs.existsSync(DATA_FILE)) {
+        fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
+    }
+    const data = fs.readFileSync(DATA_FILE, 'utf8');
+    try {
+        return JSON.parse(data);
+    } catch (e) {
+        return [];
+    }
+}
+
+// Función para guardar fechas
+function guardarFechas(fechas) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(fechas, null, 2));
+}
+
+// Servidor web simple para Render
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.get('/', (req, res) => {
-    res.send('Calendario-Bot activo y vigilando el tiempo xD');
+    res.send('Calendario-Bot activo y guardando fechas xD');
 });
 
 app.listen(PORT, '0.0.0.0', () => {
@@ -22,7 +45,7 @@ const client = new Client({
     ]
 });
 
-// Definición del comando /apuntar con sus opciones
+// Definición del comando /apuntar
 const apuntarCommand = new SlashCommandBuilder()
     .setName('apuntar')
     .setDescription('Guarda una fecha importante en el calendario del server')
@@ -59,7 +82,6 @@ const apuntarCommand = new SlashCommandBuilder()
 client.once('ready', async () => {
     console.log(`¡Calendario-Bot conectado como ${client.user.tag}!`);
 
-    // Registro automático del slash command en Discord
     const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
     try {
         console.log('Registrando comandos de barra (/) ...');
@@ -81,13 +103,26 @@ client.on('interactionCreate', async (interaction) => {
         const tipo = interaction.options.getString('tipo');
         const dia = interaction.options.getInteger('dia');
         const mes = interaction.options.getInteger('mes');
-        const anio = interaction.options.getInteger('anio') || 'No especificado';
+        const anio = interaction.options.getInteger('anio') || null;
         const hora = interaction.options.getString('hora') || 'Todo el día';
+        const autor = interaction.user.tag;
 
-        // Aquí luego metemos la lógica para guardarlo en un fechas.json
-        await interaction.reply(`¡Anotado en el mapa! Evento **"${nombre}"** de tipo [**${tipo}**] guardado para el ${dia}/${mes}/${anio} a las ${hora}. > < :v`);
+        // Cargar, agregar y guardar en el JSON
+        const listaFechas = cargarFechas();
+        listaFechas.push({
+            nombre,
+            tipo,
+            dia,
+            mes,
+            anio,
+            hora,
+            creadoPor: autor
+        });
+        guardarFechas(listaFechas);
+
+        await interaction.reply(`¡Anotado de a deveras en el mapa! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. ¡Pásele a cobrarle al Mancomelette sus 500 lucas de mentira! > < :v`);
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-                                      
+                                                  
