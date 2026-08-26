@@ -143,6 +143,9 @@ function iniciarVerificadorFechas() {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
+    // Le damos más tiempo a Discord para que no marque error si el bot va despertando
+    await interaction.deferReply({ flags: 64 }).catch(() => {});
+
     // Comando /apuntar
     if (interaction.commandName === 'apuntar') {
         const nombre = interaction.options.getString('nombre');
@@ -164,22 +167,22 @@ client.on('interactionCreate', async (interaction) => {
             avisado: false
         });
 
-        guardarFechas(); // Guardamos cambios en el archivo JSON
+        guardarFechas();
 
-        await interaction.reply(`¡Anotado y respaldado! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
+        await interaction.editReply(`¡Anotado y respaldado! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
     }
 
-    // Comando /listar (Para ver qué hay guardado exactamente)
+    // Comando /listar
     if (interaction.commandName === 'listar') {
         if (listaFechas.length === 0) {
-            return await interaction.reply({ content: 'No hay ningún evento registrado en la memoria ahora mismo. 🧐', flags: 64 });
+            return await interaction.editReply('No hay ningún evento registrado en la memoria ahora mismo. 🧐');
         }
 
         let descripcion = listaFechas.map((ev, index) => 
             `**${index + 1}.** ${ev.nombre} [${ev.tipo}] - Fecha: ${ev.dia}/${ev.mes}/${ev.anio || 'Sin año'} a las ${ev.hora}`
         ).join('\n');
 
-        await interaction.reply({ content: `📅 **Eventos en la memoria del bot:**\n${descripcion}`, flags: 64 });
+        await interaction.editReply(`📅 **Eventos en la memoria del bot:**\n${descripcion}`);
     }
 
     // Comando /borrar (Protegido para Staff)
@@ -187,7 +190,7 @@ client.on('interactionCreate', async (interaction) => {
         const miembro = interaction.member;
         
         if (!miembro.roles.cache.has(ROL_AUTORIZADO_ID)) {
-            return await interaction.reply({ content: '¡Nel, perro! No tienes el rol de Staff autorizado para borrar eventos. 🛑 > < :v', flags: 64 });
+            return await interaction.editReply('¡Nel, perro! No tienes el rol de Staff autorizado para borrar eventos. 🛑 > < :v');
         }
 
         const nombreABorrar = interaction.options.getString('nombre').trim().toLowerCase();
@@ -196,12 +199,13 @@ client.on('interactionCreate', async (interaction) => {
         listaFechas = listaFechas.filter(evento => evento.nombre.trim().toLowerCase() !== nombreABorrar);
 
         if (listaFechas.length < totalAntes) {
-            guardarFechas(); // Guardamos el cambio en el archivo JSON
-            await interaction.reply(`¡Evento **"${interaction.options.getString('nombre')}"** mandado directo a la basura con éxito! 🗑️ > < :v`);
+            guardarFechas();
+            await interaction.editReply(`¡Evento **"${interaction.options.getString('nombre')}"** mandado directo a la basura con éxito! 🗑️ > < :v`);
         } else {
-            await interaction.reply({ content: `No encontré ningún evento con ese nombre exacto. Usa el comando \`/listar\` para ver los nombres tal cual están guardados. 🧐`, flags: 64 });
+            await interaction.editReply(`No encontré ningún evento con ese nombre exacto. Usa el comando \`/listar\` para ver los nombres tal cual están guardados. 🧐`);
         }
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
+    
