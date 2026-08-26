@@ -1,8 +1,30 @@
 const express = require('express');
+const fs = require('fs');
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-// Memoria temporal del bot
+const ARCHIVO_DATOS = './fechas.json';
+
+// Cargar fechas desde el archivo JSON si existe, para sobrevivir a los reinicios de Render
 let listaFechas = [];
+if (fs.existsSync(ARCHIVO_DATOS)) {
+    try {
+        const datosGuardados = fs.readFileSync(ARCHIVO_DATOS, 'utf8');
+        listaFechas = JSON.parse(datosGuardados);
+        console.log(`¡Se cargaron ${listaFechas.length} eventos desde el archivo JSON! :v`);
+    } catch (e) {
+        console.error("Error al leer el archivo de datos:", e);
+        listaFechas = [];
+    }
+}
+
+// Función para guardar en el archivo JSON
+function guardarFechas() {
+    try {
+        fs.writeFileSync(ARCHIVO_DATOS, JSON.stringify(listaFechas, null, 2), 'utf8');
+    } catch (e) {
+        console.error("Error al escribir el archivo de datos:", e);
+    }
+}
 
 // ID del rol Staff autorizado para borrar eventos
 const ROL_AUTORIZADO_ID = '1398485777511350312'; 
@@ -12,7 +34,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.get('/', (req, res) => {
-    res.send(`Calendario-Bot activo. Eventos guardados en memoria: ${listaFechas.length} xD`);
+    res.send(`Calendario-Bot activo. Eventos guardados: ${listaFechas.length} xD`);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
@@ -28,7 +50,7 @@ const client = new Client({
     ]
 });
 
-// Definición de los comandos de barra (/apuntar y /borrar)
+// Definición de los comandos de barra (/apuntar, /borrar y /listar)
 const apuntarCommand = new SlashCommandBuilder()
     .setName('apuntar')
     .setDescription('Guarda una fecha importante en el calendario del server')
@@ -70,6 +92,10 @@ const borrarCommand = new SlashCommandBuilder()
             .setDescription('Nombre exacto del evento a eliminar')
             .setRequired(true));
 
+const listarCommand = new SlashCommandBuilder()
+    .setName('listar')
+    .setDescription('Muestra todos los eventos guardados actualmente en el bot');
+
 client.once('ready', async () => {
     console.log(`¡Calendario-Bot conectado como ${client.user.tag}!`);
 
@@ -78,7 +104,7 @@ client.once('ready', async () => {
         console.log('Registrando comandos de barra (/) ...');
         await rest.put(
             Routes.applicationCommands(client.user.id),
-            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON()] },
+            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON()] },
         );
         console.log('¡Comandos de barra registrados al centavo! :v');
     } catch (error) {
@@ -101,6 +127,7 @@ function iniciarVerificadorFechas() {
         listaFechas.forEach(async (evento) => {
             if (evento.dia === diaActual && evento.mes === mesActual && evento.hora === horaActual && !evento.avisado) {
                 evento.avisado = true;
+                guardarFechas(); // Actualizamos el archivo
 
                 client.guilds.cache.forEach(async (guild) => {
                     const canal = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('comandos') || c.name.includes('calendario')));
@@ -116,7 +143,7 @@ function iniciarVerificadorFechas() {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // Comando /apuntar (Cualquiera puede usarlo)
+    // Comando /apuntar
     if (interaction.commandName === 'apuntar') {
         const nombre = interaction.options.getString('nombre');
         const tipo = interaction.options.getString('tipo');
@@ -137,15 +164,30 @@ client.on('interactionCreate', async (interaction) => {
             avisado: false
         });
 
-        await interaction.reply(`¡Anotado en la memoria del bot! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
+        guardarFechas(); // Guardamos cambios en el archivo JSON
+
+        await interaction.reply(`¡Anotado y respaldado! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
     }
 
-    // Comando /borrar (Protegido exclusivamente para el rol Staff)
+    // Comando /listar (Para ver qué hay guardado exactamente)
+    if (interaction.commandName === 'listar') {
+        if (listaFechas.length === 0) {
+            return await interaction.reply({ content: 'No hay ningún evento registrado en la memoria ahora mismo. 🧐', flags: 64 });
+        }
+
+        let descripcion = listaFechas.map((ev, index) => 
+            `**${index + 1}.** ${ev.nombre} [${ev.tipo}] - Fecha: ${ev.dia}/${ev.mes}/${ev.anio || 'Sin año'} a las ${ev.hora}`
+        ).join('\n');
+
+        await interaction.reply({ content: `📅 **Eventos en la memoria del bot:**\n${descripcion}`, flags: 64 });
+    }
+
+    // Comando /borrar (Protegido para Staff)
     if (interaction.commandName === 'borrar') {
         const miembro = interaction.member;
         
         if (!miembro.roles.cache.has(ROL_AUTORIZADO_ID)) {
-            return await interaction.reply({ content: '¡Nel, perro! No tienes el rol de Staff autorizado para borrar eventos del calendario. 🛑 > < :v', ephemeral: true });
+            return await interaction.reply({ content: '¡Nel, perro! No tienes el rol de Staff autorizado para borrar eventos. 🛑 > < :v', flags: 64 });
         }
 
         const nombreABorrar = interaction.options.getString('nombre').trim().toLowerCase();
@@ -154,12 +196,12 @@ client.on('interactionCreate', async (interaction) => {
         listaFechas = listaFechas.filter(evento => evento.nombre.trim().toLowerCase() !== nombreABorrar);
 
         if (listaFechas.length < totalAntes) {
+            guardarFechas(); // Guardamos el cambio en el archivo JSON
             await interaction.reply(`¡Evento **"${interaction.options.getString('nombre')}"** mandado directo a la basura con éxito! 🗑️ > < :v`);
         } else {
-            await interaction.reply({ content: `No encontré ningún evento registrado con el nombre **"${interaction.options.getString('nombre')}"**. Revisa bien cómo se escribe. 🧐`, ephemeral: true });
+            await interaction.reply({ content: `No encontré ningún evento con ese nombre exacto. Usa el comando \`/listar\` para ver los nombres tal cual están guardados. 🧐`, flags: 64 });
         }
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-                        
