@@ -1,8 +1,11 @@
 const express = require('express');
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-// Memoria temporal del bot para que no se borre con los reinicios efímeros de Render
+// Memoria temporal del bot
 let listaFechas = [];
+
+// ID del rol Staff autorizado para borrar eventos
+const ROL_AUTORIZADO_ID = '1398485777511350312'; 
 
 // Servidor web simple para mantener activo el servicio en Render
 const app = express();
@@ -25,7 +28,7 @@ const client = new Client({
     ]
 });
 
-// Definición del comando /apuntar
+// Definición de los comandos de barra (/apuntar y /borrar)
 const apuntarCommand = new SlashCommandBuilder()
     .setName('apuntar')
     .setDescription('Guarda una fecha importante en el calendario del server')
@@ -59,6 +62,14 @@ const apuntarCommand = new SlashCommandBuilder()
             .setDescription('Hora del evento, ej. 18:30 (Opcional)')
             .setRequired(false));
 
+const borrarCommand = new SlashCommandBuilder()
+    .setName('borrar')
+    .setDescription('Borra un evento guardado por su nombre (Requiere rol Staff)')
+    .addStringOption(option =>
+        option.setName('nombre')
+            .setDescription('Nombre exacto del evento a eliminar')
+            .setRequired(true));
+
 client.once('ready', async () => {
     console.log(`¡Calendario-Bot conectado como ${client.user.tag}!`);
 
@@ -67,7 +78,7 @@ client.once('ready', async () => {
         console.log('Registrando comandos de barra (/) ...');
         await rest.put(
             Routes.applicationCommands(client.user.id),
-            { body: [apuntarCommand.toJSON()] },
+            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON()] },
         );
         console.log('¡Comandos de barra registrados al centavo! :v');
     } catch (error) {
@@ -88,14 +99,13 @@ function iniciarVerificadorFechas() {
         const horaActual = ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, hour: '2-digit', minute: '2-digit' }).replace(/\s/g, '');
 
         listaFechas.forEach(async (evento) => {
-            // Validamos que coincida el tiempo y que NO se haya mandado ya la alerta de este evento
             if (evento.dia === diaActual && evento.mes === mesActual && evento.hora === horaActual && !evento.avisado) {
-                evento.avisado = true; // Marcamos como notificado para evitar el doble mensaje
+                evento.avisado = true;
 
                 client.guilds.cache.forEach(async (guild) => {
                     const canal = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('comandos') || c.name.includes('calendario')));
                     if (canal) {
-                        await canal.send(`# 🚨¡ES HOY!🚨\n¡Son las ${horaActual} y hoy es: **"${evento.nombre}"** [Tipo: *${evento.tipo}*]! 🎉 `);
+                        await canal.send(`🚨 **¡ES HOY!** 🚨\n¡Son las ${horaActual} y hoy es: **"${evento.nombre}"** [Tipo: *${evento.tipo}*]! 🎉 > < :v`);
                     }
                 });
             }
@@ -106,6 +116,7 @@ function iniciarVerificadorFechas() {
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
+    // Comando /apuntar (Cualquiera puede usarlo)
     if (interaction.commandName === 'apuntar') {
         const nombre = interaction.options.getString('nombre');
         const tipo = interaction.options.getString('tipo');
@@ -115,7 +126,6 @@ client.on('interactionCreate', async (interaction) => {
         const hora = interaction.options.getString('hora') || '08:00';
         const autor = interaction.user.tag;
 
-        // Guardamos directamente en el arreglo en memoria
         listaFechas.push({
             nombre,
             tipo,
@@ -123,14 +133,33 @@ client.on('interactionCreate', async (interaction) => {
             mes,
             anio,
             hora,
-            creadoPor: autor
+            creadoPor: autor,
+            avisado: false
         });
 
-        console.log("Eventos actuales en memoria:", listaFechas);
-
         await interaction.reply(`¡Anotado en la memoria del bot! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
+    }
+
+    // Comando /borrar (Protegido exclusivamente para el rol Staff)
+    if (interaction.commandName === 'borrar') {
+        const miembro = interaction.member;
+        
+        if (!miembro.roles.cache.has(ROL_AUTORIZADO_ID)) {
+            return await interaction.reply({ content: '¡Nel, perro! No tienes el rol de Staff autorizado para borrar eventos del calendario. 🛑 > < :v', ephemeral: true });
+        }
+
+        const nombreABorrar = interaction.options.getString('nombre').trim().toLowerCase();
+        const totalAntes = listaFechas.length;
+
+        listaFechas = listaFechas.filter(evento => evento.nombre.trim().toLowerCase() !== nombreABorrar);
+
+        if (listaFechas.length < totalAntes) {
+            await interaction.reply(`¡Evento **"${interaction.options.getString('nombre')}"** mandado directo a la basura con éxito! 🗑️ > < :v`);
+        } else {
+            await interaction.reply({ content: `No encontré ningún evento registrado con el nombre **"${interaction.options.getString('nombre')}"**. Revisa bien cómo se escribe. 🧐`, ephemeral: true });
+        }
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-                                                                 
+                        
