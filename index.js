@@ -95,6 +95,28 @@ client.once('ready', async () => {
     }
 });
 
+// Función para revisar eventos automáticamente cada minuto
+function iniciarVerificadorFechas() {
+    setInterval(() => {
+        const ahora = new Date();
+        const diaActual = ahora.getDate();
+        const mesActual = ahora.getMonth() + 1; // Enero es 0
+        const horaActual = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
+
+        const listaFechas = cargarFechas();
+
+        listaFechas.forEach(evento => {
+            // Comparamos día y mes
+            if (evento.dia === diaActual && evento.mes === mesActual) {
+                // Si guardó una hora específica, validamos que coincida, si no, avisa a las 8:00 AM por defecto o cuando coincida
+                console.log(`¡Hoy es el evento de ${evento.nombre}! :v`);
+                
+                // Nota: Aquí después configuraremos el canal exacto de Discord para que mande el mensaje público.
+            }
+        });
+    }, 60000); // Se ejecuta cada 60,000 ms (1 minuto)
+}
+
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
