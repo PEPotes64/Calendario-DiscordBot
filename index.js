@@ -80,28 +80,27 @@ client.once('ready', async () => {
 // Verificador ajustado a la hora exacta de Guatemala (America/Guatemala)
 function iniciarVerificadorFechas() {
     setInterval(async () => {
-        // Obtenemos la hora actual específica de Guatemala sin importar el servidor de Render
         const opcionesFecha = { timeZone: 'America/Guatemala', hour12: false };
         const ahoraGuatemala = new Date();
         
         const diaActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, day: 'numeric' }));
         const mesActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, month: 'numeric' }));
-        
-        const horaStr = ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, hour: '2-digit', minute: '2-digit' });
-        // Limpiamos formato de hora por si trae espacios
-        const horaActual = horaStr.replace(/\s/g, '');
+        const horaActual = ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, hour: '2-digit', minute: '2-digit' }).replace(/\s/g, '');
 
         listaFechas.forEach(async (evento) => {
-            if (evento.dia === diaActual && evento.mes === mesActual && evento.hora === horaActual) {
+            // Validamos que coincida el tiempo y que NO se haya mandado ya la alerta de este evento
+            if (evento.dia === diaActual && evento.mes === mesActual && evento.hora === horaActual && !evento.avisado) {
+                evento.avisado = true; // Marcamos como notificado para evitar el doble mensaje
+
                 client.guilds.cache.forEach(async (guild) => {
                     const canal = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('comandos') || c.name.includes('calendario')));
                     if (canal) {
-                        await canal.send(`🚨 **¡ALERTA DE CALENDARIO EXACTA!** 🚨\n¡Son las ${horaActual} y toca atender: **"${evento.nombre}"** [Tipo: *${evento.tipo}*]! 🎉 > < :v`);
+                        await canal.send(`# 🚨¡ES HOY!🚨\n¡Son las ${horaActual} y hoy es: **"${evento.nombre}"** [Tipo: *${evento.tipo}*]! 🎉 `);
                     }
                 });
             }
         });
-    }, 30000); // Revisa cada 30 segundos
+    }, 30000);
 }
 
 client.on('interactionCreate', async (interaction) => {
