@@ -29,7 +29,7 @@ const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.get('/', (req, res) => {
-    res.send('Calendario-Bot activo y guardando fechas xD');
+    res.send('Calendario-Bot activo y vigilando el tiempo xD');
 });
 
 app.listen(PORT, '0.0.0.0', () => {
@@ -45,7 +45,7 @@ const client = new Client({
     ]
 });
 
-// Definición del comando /apuntar
+// Definición del comando /apuntar con sus opciones
 const apuntarCommand = new SlashCommandBuilder()
     .setName('apuntar')
     .setDescription('Guarda una fecha importante en el calendario del server')
@@ -93,28 +93,33 @@ client.once('ready', async () => {
     } catch (error) {
         console.error('Error al registrar comandos:', error);
     }
+
+    // Arrancamos el vigilante exacto en cuanto enciende el bot
+    iniciarVerificadorFechas();
 });
 
-// Función para revisar eventos automáticamente cada minuto
+// Función para revisar eventos automáticamente cada 30 segundos tomando en cuenta la hora exacta
 function iniciarVerificadorFechas() {
-    setInterval(() => {
+    setInterval(async () => {
         const ahora = new Date();
         const diaActual = ahora.getDate();
-        const mesActual = ahora.getMonth() + 1; // Enero es 0
+        const mesActual = ahora.getMonth() + 1;
         const horaActual = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
 
         const listaFechas = cargarFechas();
 
-        listaFechas.forEach(evento => {
-            // Comparamos día y mes
-            if (evento.dia === diaActual && evento.mes === mesActual) {
-                // Si guardó una hora específica, validamos que coincida, si no, avisa a las 8:00 AM por defecto o cuando coincida
-                console.log(`¡Hoy es el evento de ${evento.nombre}! :v`);
-                
-                // Nota: Aquí después configuraremos el canal exacto de Discord para que mande el mensaje público.
+        listaFechas.forEach(async (evento) => {
+            // Validamos que coincida el día, el mes y la hora exacta guardada
+            if (evento.dia === diaActual && evento.mes === mesActual && evento.hora === horaActual) {
+                client.guilds.cache.forEach(async (guild) => {
+                    const canal = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('comandos') || c.name.includes('calendario')));
+                    if (canal) {
+                        await canal.send(`🚨 **¡ALERTA DE CALENDARIO EXACTA!** 🚨\n¡Son las ${horaActual} y toca atender: **"${evento.nombre}"** [Tipo: *${evento.tipo}*]! 🎉 > < :v`);
+                    }
+                });
             }
         });
-    }, 60000); // Se ejecuta cada 60,000 ms (1 minuto)
+    }, 30000); // Se ejecuta cada 30 segundos
 }
 
 client.on('interactionCreate', async (interaction) => {
@@ -126,7 +131,7 @@ client.on('interactionCreate', async (interaction) => {
         const dia = interaction.options.getInteger('dia');
         const mes = interaction.options.getInteger('mes');
         const anio = interaction.options.getInteger('anio') || null;
-        const hora = interaction.options.getString('hora') || 'Todo el día';
+        const hora = interaction.options.getString('hora') || '08:00'; // Hora por defecto si no le ponen
         const autor = interaction.user.tag;
 
         // Cargar, agregar y guardar en el JSON
@@ -142,9 +147,8 @@ client.on('interactionCreate', async (interaction) => {
         });
         guardarFechas(listaFechas);
 
-        await interaction.reply(`¡Anotado de a deveras en el mapa! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. ¡Pásele a cobrarle al Mancomelette sus 500 lucas de mentira! > < :v`);
+        await interaction.reply(`¡Anotado de a deveras en el mapa! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-                                                  
