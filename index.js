@@ -1,35 +1,15 @@
 const express = require('express');
-const fs = require('fs');
-const path = require('path');
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-// Archivo JSON donde guardaremos las fechas
-const DATA_FILE = path.join(__dirname, 'fechas.json');
+// Memoria temporal del bot para que no se borre con los reinicios efímeros de Render
+let listaFechas = [];
 
-// Función para cargar fechas
-function cargarFechas() {
-    if (!fs.existsSync(DATA_FILE)) {
-        fs.writeFileSync(DATA_FILE, JSON.stringify([], null, 2));
-    }
-    const data = fs.readFileSync(DATA_FILE, 'utf8');
-    try {
-        return JSON.parse(data);
-    } catch (e) {
-        return [];
-    }
-}
-
-// Función para guardar fechas
-function guardarFechas(fechas) {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(fechas, null, 2));
-}
-
-// Servidor web simple para Render
+// Servidor web simple para mantener activo el servicio en Render
 const app = express();
 const PORT = process.env.PORT || 10000;
 
 app.get('/', (req, res) => {
-    res.send('Calendario-Bot activo y vigilando el tiempo xD');
+    res.send(`Calendario-Bot activo. Eventos guardados en memoria: ${listaFechas.length} xD`);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
@@ -45,7 +25,7 @@ const client = new Client({
     ]
 });
 
-// Definición del comando /apuntar con sus opciones
+// Definición del comando /apuntar
 const apuntarCommand = new SlashCommandBuilder()
     .setName('apuntar')
     .setDescription('Guarda una fecha importante en el calendario del server')
@@ -76,7 +56,7 @@ const apuntarCommand = new SlashCommandBuilder()
             .setRequired(false))
     .addStringOption(option =>
         option.setName('hora')
-            .setDescription('Hora del evento, ej. 15:30 (Opcional)')
+            .setDescription('Hora del evento, ej. 18:30 (Opcional)')
             .setRequired(false));
 
 client.once('ready', async () => {
@@ -94,22 +74,24 @@ client.once('ready', async () => {
         console.error('Error al registrar comandos:', error);
     }
 
-    // Arrancamos el vigilante exacto en cuanto enciende el bot
     iniciarVerificadorFechas();
 });
 
-// Función para revisar eventos automáticamente cada 30 segundos tomando en cuenta la hora exacta
+// Verificador ajustado a la hora exacta de Guatemala (America/Guatemala)
 function iniciarVerificadorFechas() {
     setInterval(async () => {
-        const ahora = new Date();
-        const diaActual = ahora.getDate();
-        const mesActual = ahora.getMonth() + 1;
-        const horaActual = `${String(ahora.getHours()).padStart(2, '0')}:${String(ahora.getMinutes()).padStart(2, '0')}`;
-
-        const listaFechas = cargarFechas();
+        // Obtenemos la hora actual específica de Guatemala sin importar el servidor de Render
+        const opcionesFecha = { timeZone: 'America/Guatemala', hour12: false };
+        const ahoraGuatemala = new Date();
+        
+        const diaActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, day: 'numeric' }));
+        const mesActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, month: 'numeric' }));
+        
+        const horaStr = ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, hour: '2-digit', minute: '2-digit' });
+        // Limpiamos formato de hora por si trae espacios
+        const horaActual = horaStr.replace(/\s/g, '');
 
         listaFechas.forEach(async (evento) => {
-            // Validamos que coincida el día, el mes y la hora exacta guardada
             if (evento.dia === diaActual && evento.mes === mesActual && evento.hora === horaActual) {
                 client.guilds.cache.forEach(async (guild) => {
                     const canal = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('comandos') || c.name.includes('calendario')));
@@ -119,7 +101,7 @@ function iniciarVerificadorFechas() {
                 });
             }
         });
-    }, 30000); // Se ejecuta cada 30 segundos
+    }, 30000); // Revisa cada 30 segundos
 }
 
 client.on('interactionCreate', async (interaction) => {
@@ -131,11 +113,10 @@ client.on('interactionCreate', async (interaction) => {
         const dia = interaction.options.getInteger('dia');
         const mes = interaction.options.getInteger('mes');
         const anio = interaction.options.getInteger('anio') || null;
-        const hora = interaction.options.getString('hora') || '08:00'; // Hora por defecto si no le ponen
+        const hora = interaction.options.getString('hora') || '08:00';
         const autor = interaction.user.tag;
 
-        // Cargar, agregar y guardar en el JSON
-        const listaFechas = cargarFechas();
+        // Guardamos directamente en el arreglo en memoria
         listaFechas.push({
             nombre,
             tipo,
@@ -145,10 +126,12 @@ client.on('interactionCreate', async (interaction) => {
             hora,
             creadoPor: autor
         });
-        guardarFechas(listaFechas);
 
-        await interaction.reply(`¡Anotado de a deveras en el mapa! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
+        console.log("Eventos actuales en memoria:", listaFechas);
+
+        await interaction.reply(`¡Anotado en la memoria del bot! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
+                                                                 
