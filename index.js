@@ -10,7 +10,7 @@ const client = new Client({
     ]
 });
 
-// Conexión a MongoDB Atlas (Asegúrate de tener tu variable de entorno configurada)
+// Conexión a MongoDB Atlas
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('¡Conectado a MongoDB con éxito! > < :v'))
     .catch(err => console.error('Error al conectar a MongoDB:', err));
@@ -59,8 +59,22 @@ const commands = [
             option.setName('nueva_fecha').setDescription('Nueva fecha para el evento (opcional)').setRequired(false))
 ].map(command => command.toJSON());
 
+// Configuración del REST para registrar comandos en Discord al encender
+const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+
 client.once('ready', async () => {
     console.log(`¡Bot encendido y listo como ${client.user.tag}! > < :v`);
+    
+    try {
+        console.log('Actualizando comandos de barra en Discord...');
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: commands },
+        );
+        console.log('¡Comandos actualizados al 100! > < :v');
+    } catch (error) {
+        console.error(error);
+    }
 });
 
 // Manejador de interacciones para los comandos
