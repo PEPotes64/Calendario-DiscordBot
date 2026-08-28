@@ -1,30 +1,31 @@
 const express = require('express');
-const fs = require('fs');
+const mongoose = require('mongoose');
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 
-const ARCHIVO_DATOS = './fechas.json';
+// Conexión a MongoDB (Lee la URL desde las variables de entorno de Render)
+const MONGO_URL = process.env.MONGO_URL;
 
-// Cargar fechas desde el archivo JSON si existe, para sobrevivir a los reinicios de Render
-let listaFechas = [];
-if (fs.existsSync(ARCHIVO_DATOS)) {
-    try {
-        const datosGuardados = fs.readFileSync(ARCHIVO_DATOS, 'utf8');
-        listaFechas = JSON.parse(datosGuardados);
-        console.log(`¡Se cargaron ${listaFechas.length} eventos desde el archivo JSON! :v`);
-    } catch (e) {
-        console.error("Error al leer el archivo de datos:", e);
-        listaFechas = [];
-    }
+if (!MONGO_URL) {
+    console.error("¡FALTA LA VARIABLE MONGO_URL EN RENDER! Configúrala para guardar los datos. > < :v");
 }
 
-// Función para guardar en el archivo JSON
-function guardarFechas() {
-    try {
-        fs.writeFileSync(ARCHIVO_DATOS, JSON.stringify(listaFechas, null, 2), 'utf8');
-    } catch (e) {
-        console.error("Error al escribir el archivo de datos:", e);
-    }
-}
+mongoose.connect(MONGO_URL)
+    .then(() => console.log('¡Conectado a MongoDB Atlas con éxito! :v'))
+    .catch(err => console.error('Error al conectar a MongoDB:', err));
+
+// Definir el esquema y modelo de los eventos en la base de datos
+const eventoSchema = new mongoose.Schema({
+    nombre: String,
+    tipo: String,
+    dia: Number,
+    mes: Number,
+    anio: Number,
+    hora: String,
+    creadoPor: String,
+    avisado: Boolean
+});
+
+const Evento = mongoose.model('Evento', eventoSchema);
 
 // ID del rol Staff autorizado para borrar eventos
 const ROL_AUTORIZADO_ID = '1398485777511350312'; 
@@ -33,8 +34,13 @@ const ROL_AUTORIZADO_ID = '1398485777511350312';
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-app.get('/', (req, res) => {
-    res.send(`Calendario-Bot activo. Eventos guardados: ${listaFechas.length} xD`);
+app.get('/', async (req, res) => {
+    try {
+        const total = await Evento.countDocuments();
+        res.send(`Calendario-Bot activo con MongoDB. Eventos guardados: ${total} xD`);
+    } catch (e) {
+        res.send('Calendario-Bot activo, pero con problemas al contar la BD.');
+    }
 });
 
 app.listen(PORT, '0.0.0.0', () => {
@@ -114,20 +120,22 @@ client.once('ready', async () => {
     iniciarVerificadorFechas();
 });
 
-// Verificador ajustado a la hora exacta de Guatemala (America/Guatemala)
+// Verificador ajustado a la hora exacta de Guatemala (America/Guatemala) con MongoDB
 function iniciarVerificadorFechas() {
     setInterval(async () => {
-        const opcionesFecha = { timeZone: 'America/Guatemala', hour12: false };
-        const ahoraGuatemala = new Date();
-        
-        const diaActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, day: 'numeric' }));
-        const mesActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, month: 'numeric' }));
-        const horaActual = ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, hour: '2-digit', minute: '2-digit' }).replace(/\s/g, '');
+        try {
+            const opcionesFecha = { timeZone: 'America/Guatemala', hour12: false };
+            const ahoraGuatemala = new Date();
+            
+            const diaActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, day: 'numeric' }));
+            const mesActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, month: 'numeric' }));
+            const horaActual = ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, hour: '2-digit', minute: '2-digit' }).replace(/\s/g, '');
 
-        listaFechas.forEach(async (evento) => {
-            if (evento.dia === diaActual && evento.mes === mesActual && evento.hora === horaActual && !evento.avisado) {
+            const eventosHoy = await Evento.find({ dia: diaActual, mes: mesActual, hora: horaActual, avisado: false });
+
+            for (const evento of eventosHoy) {
                 evento.avisado = true;
-                guardarFechas(); // Actualizamos el archivo
+                await evento.save();
 
                 client.guilds.cache.forEach(async (guild) => {
                     const canal = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('comandos') || c.name.includes('calendario')));
@@ -136,14 +144,15 @@ function iniciarVerificadorFechas() {
                     }
                 });
             }
-        });
+        } catch (e) {
+            console.error("Error en el verificador de fechas:", e);
+        }
     }, 30000);
 }
 
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    // Le damos más tiempo a Discord para que no marque error si el bot va despertando
     await interaction.deferReply({ flags: 64 }).catch(() => {});
 
     // Comando /apuntar
@@ -156,33 +165,45 @@ client.on('interactionCreate', async (interaction) => {
         const hora = interaction.options.getString('hora') || '08:00';
         const autor = interaction.user.tag;
 
-        listaFechas.push({
-            nombre,
-            tipo,
-            dia,
-            mes,
-            anio,
-            hora,
-            creadoPor: autor,
-            avisado: false
-        });
+        try {
+            const nuevoEvento = new Evento({
+                nombre,
+                tipo,
+                dia,
+                mes,
+                anio,
+                hora,
+                creadoPor: autor,
+                avisado: false
+            });
 
-        guardarFechas();
+            await nuevoEvento.save();
 
-        await interaction.editReply(`¡Anotado y respaldado! Evento **"${nombre}"** [**${tipo}**] guardado para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
+            await interaction.editReply(`¡Anotado y guardado en la nube! Evento **"${nombre}"** [**${tipo}**] para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
+        } catch (e) {
+            console.error(e);
+            await interaction.editReply('Hubo un error al guardar el evento en la base de datos. 💀');
+        }
     }
 
     // Comando /listar
     if (interaction.commandName === 'listar') {
-        if (listaFechas.length === 0) {
-            return await interaction.editReply('No hay ningún evento registrado en la memoria ahora mismo. 🧐');
+        try {
+            const listaFechas = await Evento.find();
+
+            if (listaFechas.length === 0) {
+                return await interaction.editReply('No hay ningún evento registrado en la nube ahora mismo. 🧐');
+            }
+
+            let descripcion = listaFechas.map((ev, index) => 
+                `**${index + 1}.** ${ev.nombre} [${ev.tipo}] - Fecha: ${ev.dia}/${ev.mes}/${ev.anio || 'Sin año'} a las ${ev.hora}`
+            ).join('\n');
+
+            await interaction.editReply(`📅 **Eventos en la base de datos:**\n${descripcion}`);
+        } catch (e) {
+            console.error(e);
+            await interaction.editReply('Error al consultar los eventos. 💀');
         }
-
-        let descripcion = listaFechas.map((ev, index) => 
-            `**${index + 1}.** ${ev.nombre} [${ev.tipo}] - Fecha: ${ev.dia}/${ev.mes}/${ev.anio || 'Sin año'} a las ${ev.hora}`
-        ).join('\n');
-
-        await interaction.editReply(`📅 **Eventos en la memoria del bot:**\n${descripcion}`);
     }
 
     // Comando /borrar (Protegido para Staff)
@@ -193,19 +214,24 @@ client.on('interactionCreate', async (interaction) => {
             return await interaction.editReply('¡Nel, perro! No tienes el rol de Staff autorizado para borrar eventos. 🛑 > < :v');
         }
 
-        const nombreABorrar = interaction.options.getString('nombre').trim().toLowerCase();
-        const totalAntes = listaFechas.length;
+        const nombreABorrar = interaction.options.getString('nombre').trim();
 
-        listaFechas = listaFechas.filter(evento => evento.nombre.trim().toLowerCase() !== nombreABorrar);
+        try {
+            const resultado = await Evento.findOneAndDelete({ 
+                nombre: { $regex: new RegExp(`^${nombreABorrar}$`, 'i') } 
+            });
 
-        if (listaFechas.length < totalAntes) {
-            guardarFechas();
-            await interaction.editReply(`¡Evento **"${interaction.options.getString('nombre')}"** mandado directo a la basura con éxito! 🗑️ > < :v`);
-        } else {
-            await interaction.editReply(`No encontré ningún evento con ese nombre exacto. Usa el comando \`/listar\` para ver los nombres tal cual están guardados. 🧐`);
+            if (resultado) {
+                await interaction.editReply(`¡Evento **"${resultado.nombre}"** mandado directo a la basura con éxito! 🗑️ > < :v`);
+            } else {
+                await interaction.editReply(`No encontré ningún evento con ese nombre exacto. Usa el comando \`/listar\` para ver los nombres tal cual están guardados. 🧐`);
+            }
+        } catch (e) {
+            console.error(e);
+            await interaction.editReply('Error al intentar borrar el evento. 💀');
         }
     }
 });
 
 client.login(process.env.DISCORD_TOKEN);
-    
+                
