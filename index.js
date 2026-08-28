@@ -1,5 +1,11 @@
 const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
 const mongoose = require('mongoose');
+const express = require('express'); // Aki agregamos express pal render prro > < :v
+
+// Mini servidor web pa ke Render no crashe el bot
+const app = express();
+app.get('/', (req, res) => res.send('El bot de Pepo ta despierto prro > < :v'));
+app.listen(process.env.PORT || 3000, () => console.log('Servidor web encendido para Render :v'));
 
 // Configuración del cliente de Discord
 const client = new Client({
@@ -10,7 +16,7 @@ const client = new Client({
     ]
 });
 
-// Conexión a MongoDB Atlas
+// Conexión a MongoDB Atlas (Asegúrate de tener tu variable de entorno configurada)
 mongoose.connect(process.env.MONGO_URI)
     .then(() => console.log('¡Conectado a MongoDB con éxito! > < :v'))
     .catch(err => console.error('Error al conectar a MongoDB:', err));
@@ -59,19 +65,20 @@ const commands = [
             option.setName('nueva_fecha').setDescription('Nueva fecha para el evento (opcional)').setRequired(false))
 ].map(command => command.toJSON());
 
-// Configuración del REST para registrar comandos en Discord al encender
+// Configuración del REST pa registrar los comandos en Discord
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 client.once('ready', async () => {
     console.log(`¡Bot encendido y listo como ${client.user.tag}! > < :v`);
     
+    // Aki le avisamos a Discord de los comandos nuebos
     try {
-        console.log('Actualizando comandos de barra en Discord...');
+        console.log('Actualisando comandos de barra en Discord...');
         await rest.put(
             Routes.applicationCommands(client.user.id),
             { body: commands },
         );
-        console.log('¡Comandos actualizados al 100! > < :v');
+        console.log('¡Comandos actualisados al 100! > < :v');
     } catch (error) {
         console.error(error);
     }
@@ -83,7 +90,7 @@ client.on('interactionCreate', async interaction => {
 
     const { commandName } = interaction;
 
-    // Comando: /apuntar
+    // Comando: /apuntar (intacto komo me pediste)
     if (commandName === 'apuntar') {
         const nombre = interaction.options.getString('nombre');
         const tipo = interaction.options.getString('tipo');
@@ -101,7 +108,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // Comando: /listar
+    // Comando: /listar (intacto)
     else if (commandName === 'listar') {
         await interaction.deferReply({ flags: 64 }).catch(() => {});
 
@@ -124,7 +131,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // Comando: /borrar
+    // Comando: /borrar (intacto)
     else if (commandName === 'borrar') {
         const nombreBajar = interaction.options.getString('nombre');
 
@@ -143,7 +150,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // Comando: /editar
+    // Comando: /editar (el bueno pa q jale)
     else if (commandName === 'editar') {
         const nombreViejo = interaction.options.getString('nombre_actual');
         const nuevoNombre = interaction.options.getString('nuevo_nombre');
@@ -176,3 +183,4 @@ client.on('interactionCreate', async interaction => {
 
 // Inicia sesión en Discord con tu token
 client.login(process.env.DISCORD_TOKEN);
+
