@@ -1,5 +1,51 @@
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const express = require('express');
 const mongoose = require('mongoose');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+
+// Conexión a MongoDB (Lee la URL desde las variables de entorno de Render)
+const MONGO_URL = process.env.MONGO_URL;
+
+if (!MONGO_URL) {
+    console.error("¡FALTA LA VARIABLE MONGO_URL EN RENDER! Configúrala para guardar los datos. > < :v");
+}
+
+mongoose.connect(MONGO_URL)
+    .then(() => console.log('¡Conectado a MongoDB Atlas con éxito! :v'))
+    .catch(err => console.error('Error al conectar a MongoDB:', err));
+
+// Definir el esquema y modelo de los eventos en la base de datos
+const eventoSchema = new mongoose.Schema({
+    nombre: String,
+    tipo: String,
+    dia: Number,
+    mes: Number,
+    anio: Number,
+    hora: String,
+    creadoPor: String,
+    avisado: Boolean
+});
+
+const Evento = mongoose.model('Evento', eventoSchema);
+
+// ID del rol Staff autorizado para borrar eventos
+const ROL_AUTORIZADO_ID = '1398485777511350312'; 
+
+// Servidor web simple para mantener activo el servicio en Render
+const app = express();
+const PORT = process.env.PORT || 10000;
+
+app.get('/', async (req, res) => {
+    try {
+        const total = await Evento.countDocuments();
+        res.send(`Calendario-Bot activo con MongoDB. Eventos guardados: ${total} xD`);
+    } catch (e) {
+        res.send('Calendario-Bot activo, pero con problemas al contar la BD.');
+    }
+});
+
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Servidor HTTP en puerto ${PORT}`);
+});
 
 // Configuración del cliente de Discord
 const client = new Client({
@@ -10,127 +56,182 @@ const client = new Client({
     ]
 });
 
-// Conexión a MongoDB Atlas (Asegúrate de tener tu variable de entorno configurada)
-mongoose.connect(process.env.MONGO_URI)
-    .then(() => console.log('¡Conectado a MongoDB con éxito! > < :v'))
-    .catch(err => console.error('Error al conectar a MongoDB:', err));
+// Definición de los comandos de barra (/apuntar, /borrar y /listar)
+const apuntarCommand = new SlashCommandBuilder()
+    .setName('apuntar')
+    .setDescription('Guarda una fecha importante en el calendario del server')
+    .addStringOption(option =>
+        option.setName('nombre')
+            .setDescription('Nombre del evento o cumple')
+            .setRequired(true))
+    .addStringOption(option =>
+        option.setName('tipo')
+            .setDescription('Selecciona el tipo de evento')
+            .setRequired(true)
+            .addChoices(
+                { name: 'Cumpleaños', value: 'cumple' },
+                { name: 'Salida de un medio de entretenimiento', value: 'entretenimiento' },
+                { name: 'Aniversario', value: 'aniversario' }
+            ))
+    .addIntegerOption(option =>
+        option.setName('dia')
+            .setDescription('Día del mes (1-31)')
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('mes')
+            .setDescription('Mes del año (1-12)')
+            .setRequired(true))
+    .addIntegerOption(option =>
+        option.setName('anio')
+            .setDescription('Año (Opcional)')
+            .setRequired(false))
+    .addStringOption(option =>
+        option.setName('hora')
+            .setDescription('Hora del evento, ej. 18:30 (Opcional)')
+            .setRequired(false));
 
-// Esquema y Modelo de Mongoose para los Eventos
-const eventoSchema = new mongoose.Schema({
-    nombre: String,
-    tipo: String,
-    fecha: String,
-    hora: String,
-    userId: String
-});
+const borrarCommand = new SlashCommandBuilder()
+    .setName('borrar')
+    .setDescription('Borra un evento guardado por su nombre (Requiere rol Staff)')
+    .addStringOption(option =>
+        option.setName('nombre')
+            .setDescription('Nombre exacto del evento a eliminar')
+            .setRequired(true));
 
-const Evento = mongoose.model('Evento', eventoSchema);
-
-// Registro de comandos de barra (Slash Commands)
-const commands = [
-    new SlashCommandBuilder()
-        .setName('apuntar')
-        .setDescription('Anota un nuevo evento en el calendario')
-        .addStringOption(option => 
-            option.setName('nombre').setDescription('Nombre del evento').setRequired(true))
-        .addStringOption(option => 
-            option.setName('tipo').setDescription('Tipo de evento (ej. cumple)').setRequired(true))
-        .addStringOption(option => 
-            option.setName('fecha').setDescription('Fecha del evento').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('listar')
-        .setDescription('Muestra todos los eventos guardados en la base de datos'),
-
-    new SlashCommandBuilder()
-        .setName('borrar')
-        .setDescription('Borra un evento por su nombre')
-        .addStringOption(option => 
-            option.setName('nombre').setDescription('Nombre exacto del evento a borrar').setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('editar')
-        .setDescription('Modifica un evento existente en la base de datos')
-        .addStringOption(option => 
-            option.setName('nombre_actual').setDescription('Nombre actual del evento que quieres cambiar').setRequired(true))
-        .addStringOption(option => 
-            option.setName('nuevo_nombre').setDescription('Nuevo nombre para el evento (opcional)').setRequired(false))
-        .addStringOption(option => 
-            option.setName('nueva_fecha').setDescription('Nueva fecha para el evento (opcional)').setRequired(false))
-].map(command => command.toJSON());
+const listarCommand = new SlashCommandBuilder()
+    .setName('listar')
+    .setDescription('Muestra todos los eventos guardados actualmente en el bot');
 
 client.once('ready', async () => {
-    console.log(`¡Bot encendido y listo como ${client.user.tag}! > < :v`);
+    console.log(`¡Calendario-Bot conectado como ${client.user.tag}!`);
+
+    const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
+    try {
+        console.log('Registrando comandos de barra (/) ...');
+        await rest.put(
+            Routes.applicationCommands(client.user.id),
+            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON()] },
+        );
+        console.log('¡Comandos de barra registrados al centavo! :v');
+    } catch (error) {
+        console.error('Error al registrar comandos:', error);
+    }
+
+    iniciarVerificadorFechas();
 });
 
-// Manejador de interacciones para los comandos
-client.on('interactionCreate', async interaction => {
+// Verificador ajustado a la hora exacta de Guatemala (America/Guatemala) con MongoDB
+function iniciarVerificadorFechas() {
+    setInterval(async () => {
+        try {
+            const opcionesFecha = { timeZone: 'America/Guatemala', hour12: false };
+            const ahoraGuatemala = new Date();
+            
+            const diaActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, day: 'numeric' }));
+            const mesActual = parseInt(ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, month: 'numeric' }));
+            const horaActual = ahoraGuatemala.toLocaleString('en-US', { ...opcionesFecha, hour: '2-digit', minute: '2-digit' }).replace(/\s/g, '');
+
+            const eventosHoy = await Evento.find({ dia: diaActual, mes: mesActual, hora: horaActual, avisado: false });
+
+            for (const evento of eventosHoy) {
+                evento.avisado = true;
+                await evento.save();
+
+                client.guilds.cache.forEach(async (guild) => {
+                    const canal = guild.channels.cache.find(c => c.isTextBased() && (c.name.includes('general') || c.name.includes('comandos') || c.name.includes('calendario')));
+                    if (canal) {
+                        await canal.send(`🚨 **¡ES HOY!** 🚨\n¡Son las ${horaActual} y hoy es: **"${evento.nombre}"** [Tipo: *${evento.tipo}*]! 🎉 > < :v`);
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("Error en el verificador de fechas:", e);
+        }
+    }, 30000);
+}
+
+client.on('interactionCreate', async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
-    const { commandName } = interaction;
+    await interaction.deferReply({ flags: 64 }).catch(() => {});
 
-    // Comando: /apuntar
-    if (commandName === 'apuntar') {
+    // Comando /apuntar
+    if (interaction.commandName === 'apuntar') {
         const nombre = interaction.options.getString('nombre');
         const tipo = interaction.options.getString('tipo');
-        const fecha = interaction.options.getString('fecha');
-
-        await interaction.deferReply({ flags: 64 }).catch(() => {});
-
-        try {
-            const nuevoEvento = new Evento({ nombre, tipo, fecha, userId: interaction.user.id });
-            await nuevoEvento.save();
-            await interaction.editReply(`¡Anotado y guardado en la nube! Evento "${nombre}" [${tipo}] para el ${fecha}. > < :v`);
-        } catch (error) {
-            console.error(error);
-            await interaction.editReply('¡Chale, tronó la base de datos al guardar! > < :v');
-        }
-    }
-
-    // Comando: /listar
-    else if (commandName === 'listar') {
-        await interaction.deferReply({ flags: 64 }).catch(() => {});
+        const dia = interaction.options.getInteger('dia');
+        const mes = interaction.options.getInteger('mes');
+        const anio = interaction.options.getInteger('anio') || null;
+        const hora = interaction.options.getString('hora') || '08:00';
+        const autor = interaction.user.tag;
 
         try {
-            const eventos = await Evento.find();
-            if (eventos.length === 0) {
-                await interaction.editReply('No hay ningún evento registrado en la base de datos todavía. > < :v');
-                return;
-            }
-
-            let listaTexto = '📅 **Eventos en la base de datos:**\n';
-            eventos.forEach((ev, index) => {
-                listaTexto += `${index + 1}. **${ev.nombre}** [${ev.tipo}] - Fecha: ${ev.fecha}\n`;
+            const nuevoEvento = new Evento({
+                nombre,
+                tipo,
+                dia,
+                mes,
+                anio,
+                hora,
+                creadoPor: autor,
+                avisado: false
             });
 
-            await interaction.editReply(listaTexto);
-        } catch (error) {
-            console.error(error);
-            await interaction.editReply('¡Chale, no se pudo cargar la lista desde la nube! > < :v');
+            await nuevoEvento.save();
+
+            await interaction.editReply(`¡Anotado y guardado en la nube! Evento **"${nombre}"** [**${tipo}**] para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
+        } catch (e) {
+            console.error(e);
+            await interaction.editReply('Hubo un error al guardar el evento en la base de datos. 💀');
         }
     }
 
-    // Comando: /borrar
-    else if (commandName === 'borrar') {
-        const nombreBajar = interaction.options.getString('nombre');
+    // Comando /listar
+    if (interaction.commandName === 'listar') {
+        try {
+            const listaFechas = await Evento.find();
 
-        await interaction.deferReply({ flags: 64 }).catch(() => {});
+            if (listaFechas.length === 0) {
+                return await interaction.editReply('No hay ningún evento registrado en la nube ahora mismo. 🧐');
+            }
+
+            let descripcion = listaFechas.map((ev, index) => 
+                `**${index + 1}.** ${ev.nombre} [${ev.tipo}] - Fecha: ${ev.dia}/${ev.mes}/${ev.anio || 'Sin año'} a las ${ev.hora}`
+            ).join('\n');
+
+            await interaction.editReply(`📅 **Eventos en la base de datos:**\n${descripcion}`);
+        } catch (e) {
+            console.error(e);
+            await interaction.editReply('Error al consultar los eventos. 💀');
+        }
+    }
+
+    // Comando /borrar (Protegido para Staff)
+    if (interaction.commandName === 'borrar') {
+        const miembro = interaction.member;
+        
+        if (!miembro.roles.cache.has(ROL_AUTORIZADO_ID)) {
+            return await interaction.editReply('¡Nel, perro! No tienes el rol de Staff autorizado para borrar eventos. 🛑 > < :v');
+        }
+
+        const nombreABorrar = interaction.options.getString('nombre').trim();
 
         try {
-            const resultado = await Evento.findOneAndDelete({ nombre: nombreBajar });
-            if (!resultado) {
-                await interaction.editReply(`¡Nel, no encontré ningún evento llamado "${nombreBajar}"! > < :v`);
+            const resultado = await Evento.findOneAndDelete({ 
+                nombre: { $regex: new RegExp(`^${nombreABorrar}$`, 'i') } 
+            });
+
+            if (resultado) {
+                await interaction.editReply(`¡Evento **"${resultado.nombre}"** mandado directo a la basura con éxito! 🗑️ > < :v`);
             } else {
-                await interaction.editReply(`¡Evento "${nombreBajar}" mandado directo a la basura con éxito! 🗑️ > < :v`);
+                await interaction.editReply(`No encontré ningún evento con ese nombre exacto. Usa el comando \`/listar\` para ver los nombres tal cual están guardados. 🧐`);
             }
-        } catch (error) {
-            console.error(error);
-            await interaction.editReply('¡Chale, tronó la base de datos al borrar! > < :v');
+        } catch (e) {
+            console.error(e);
+            await interaction.editReply('Error al intentar borrar el evento. 💀');
         }
     }
-
 });
 
-// Inicia sesión en Discord con tu token
 client.login(process.env.DISCORD_TOKEN);
-
+                                              
