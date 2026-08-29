@@ -243,7 +243,7 @@ const recuerdoCommand = new ContextMenuCommandBuilder()
     .setName('Recuerdo')
     .setType(ApplicationCommandType.Message);
 
-    if (interaction.commandName === 'Recuerdo') {
+    if (interaction.commandName === 'recuerdo') {
     const targetMessage = interaction.targetMessage;
 
     if (!targetMessage) {
