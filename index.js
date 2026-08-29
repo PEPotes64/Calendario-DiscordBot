@@ -237,21 +237,25 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
     
-if (interaction.commandName === 'recuerdo') {
-    // Obtenemos el mensaje al que le hicieron reply
-    const targetMessage = interaction.options.getMessage('mensaje'); // o desde interaction.targetMessage si usas comandos de contexto
+const { ContextMenuCommandBuilder, ApplicationCommandType } = require('discord.js');
+
+const recuerdoCommand = new ContextMenuCommandBuilder()
+    .setName('Recuerdo')
+    .setType(ApplicationCommandType.Message);
+
+    if (interaction.commandName === 'Recuerdo') {
+    const targetMessage = interaction.targetMessage;
 
     if (!targetMessage) {
-        await interaction.reply({ content: '¡Tienes que responderle a un mensaje para guardarlo como recuerdo, prro! > < :v', flags: 64 });
-        return;
+        return await interaction.reply({ content: '¡Tienes que seleccionar un mensaje, perro! > < :v', ephemeral: true });
     }
 
-    const fechaOriginal = targetMessage.createdAt; // Fecha en la que se mandó originalmente
+    const fechaOriginal = targetMessage.createdAt;
     const dia = fechaOriginal.getDate();
     const mes = fechaOriginal.getMonth() + 1;
     const ano = fechaOriginal.getFullYear();
 
-    await interaction.deferReply({ flags: 64 });
+    await interaction.deferReply({ ephemeral: true });
 
     try {
         await Recuerdo.create({
@@ -268,7 +272,8 @@ if (interaction.commandName === 'recuerdo') {
         console.error(error);
         await interaction.editReply('¡Chale, tronó la base de datos al guardar el recuerdo! > < :v');
     }
-}
+
+ }
     
 });
 
