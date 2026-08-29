@@ -159,6 +159,7 @@ function iniciarVerificadorFechas() {
 client.on('interactionCreate', async interaction => {
     // 1. Atrapamos primero el menú contextual de mensaje
     if (interaction.isMessageContextMenuCommand() && interaction.commandName === 'recuerdo') {
+        console.log("-> Entró al menú contextual de recuerdo");
         await interaction.deferReply({ ephemeral: true }).catch(() => {});
 
         const targetMessage = interaction.targetMessage;
@@ -172,7 +173,10 @@ client.on('interactionCreate', async interaction => {
         const mes = fechaOriginal.getMonth() + 1;
         const ano = fechaOriginal.getFullYear();
 
+        console.log("-> Datos obtenidos:", { content: targetMessage.content, dia, mes, ano });
+
         try {
+            console.log("-> Intentando guardar en la base de datos...");
             await Recuerdo.create({
                 content: targetMessage.content,
                 authorTag: targetMessage.author.tag,
@@ -181,14 +185,15 @@ client.on('interactionCreate', async interaction => {
                 mes: mes,
                 ano: ano
             });
+            console.log("-> ¡Guardado con éxito en la base de datos!");
 
             return await interaction.editReply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v` });
         } catch (error) {
-            console.error(error);
+            console.error("-> ERROR AL GUARDAR EN MONGO:", error);
             return await interaction.editReply({ content: '¡exploto la base de datos al guardar el recuerdo💀!' });
         }
     }
-
+    
     // 2. Filtro para los comandos de barra normales
     if (!interaction.isChatInputCommand()) return;
 
