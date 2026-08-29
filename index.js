@@ -103,6 +103,10 @@ const listarCommand = new SlashCommandBuilder()
     .setName('listar')
     .setDescription('Muestra todos los eventos guardados actualmente en el bot');
 
+const proximoCommand = new SlashCommandBuilder()
+    .setName('proximo')
+    .setDescription('Muestra cuánto falta para el próximo evento o recuerdo guardado');
+
 const recuerdoCommand = new ContextMenuCommandBuilder()
     .setName('recuerdo')
     .setType(ApplicationCommandType.Message);
@@ -119,7 +123,7 @@ client.once('ready', async () => {
         console.log('Registrando comandos de barra (/) ...');
         await rest.put(
             Routes.applicationCommands(client.user.id),
-            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON(), recuerdoCommand.toJSON(), olvidarCommand.toJSON()] }
+            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON(), proximoCommand.toJSON(), recuerdoCommand.toJSON(), olvidarCommand.toJSON()] }
             
         );
         console.log('¡Comandos de barra registrados al centavo! :v');
@@ -272,6 +276,46 @@ client.on('interactionCreate', async interaction => {
             console.error(e);
             await interaction.editReply('Error al intentar borrar el evento. 💀');
         }
+    }
+
+    // Comando /proximo
+if (interaction.commandName === 'proximo') {
+    try {
+        const ahora = new Date();
+        const lista = await Evento.find();
+
+        if (!lista || lista.length === 0) {
+            return await interaction.editReply({ content: 'No hay ningún evento guardado en la nube todavía, paps :v' });
+        }
+
+        let eventoProximo = null;
+        let menorDiferencia = Infinity;
+
+        for (const ev of lista) {
+            const anioEv = ev.anio || ahora.getFullYear();
+            const fechaEv = new Date(anioEv, ev.mes - 1, ev.dia);
+            const diferencia = fechaEv.getTime() - ahora.getTime();
+
+            if (diferencia >= 0 && diferencia < menorDiferencia) {
+                menorDiferencia = diferencia;
+                eventoProximo = ev;
+            }
+        }
+
+        if (!eventoProximo) {
+            return await interaction.editReply({ content: 'No encontré próximos eventos futuros en la base de datos :v' });
+        }
+
+        const diasFaltantes = Math.ceil(menorDiferencia / (1000 * 60 * 60 * 24));
+
+        return await interaction.editReply({ 
+            content: `⏳ El próximo evento es **"${eventoProximo.nombre}"** (${eventoProximo.tipo}) y faltan aproximadamente **${diasFaltantes} días** (${eventoProximo.dia}/${eventoProximo.mes}/${eventoProximo.anio || ahora.getFullYear()}) > < :v` 
+        });
+
+    } catch (error) {
+        console.error('Error al calcular el próximo evento:', error);
+        return await interaction.editReply({ content: '¡Exploto la base de datos al buscar el próximo evento💀!' });
+    }
     }
     
 });
