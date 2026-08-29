@@ -157,12 +157,14 @@ function iniciarVerificadorFechas() {
 }
 
 client.on('interactionCreate', async interaction => {
-    // 1. Atrapamos primero el menú contextual de mensaje
-    if (interaction.isMessageContextMenuCommand() && interaction.commandName === 'recuerdo') {
-        console.log("-> Entró al menú contextual de recuerdo");
-        await interaction.deferReply({ ephemeral: true }).catch(() => {});
+    console.log("-> LLEGÓ UNA INTERACCIÓN:", interaction.commandName, "Es chat input?", interaction.isChatInputCommand(), "Es context menu?", interaction.isContextMenuCommand());
+
+    if (interaction.commandName === 'recuerdo') {
+        console.log("-> ¡SÍ ENTRÓ AL COMANDO RECUERDO!");
+        await interaction.deferReply({ ephemeral: true }).catch(err => console.log("Error en defer:", err));
 
         const targetMessage = interaction.targetMessage;
+        console.log("-> Mensaje objetivo obtenido:", targetMessage ? targetMessage.content : "NULO");
 
         if (!targetMessage) {
             return await interaction.editReply({ content: '¡Tienes que seleccionar un mensaje, perro! > < :v' });
@@ -173,10 +175,7 @@ client.on('interactionCreate', async interaction => {
         const mes = fechaOriginal.getMonth() + 1;
         const ano = fechaOriginal.getFullYear();
 
-        console.log("-> Datos obtenidos:", { content: targetMessage.content, dia, mes, ano });
-
         try {
-            console.log("-> Intentando guardar en la base de datos...");
             await Recuerdo.create({
                 content: targetMessage.content,
                 authorTag: targetMessage.author.tag,
@@ -185,11 +184,10 @@ client.on('interactionCreate', async interaction => {
                 mes: mes,
                 ano: ano
             });
-            console.log("-> ¡Guardado con éxito en la base de datos!");
 
             return await interaction.editReply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v` });
         } catch (error) {
-            console.error("-> ERROR AL GUARDAR EN MONGO:", error);
+            console.error("-> Error al guardar en mongo:", error);
             return await interaction.editReply({ content: '¡exploto la base de datos al guardar el recuerdo💀!' });
         }
     }
