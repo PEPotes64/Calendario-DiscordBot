@@ -102,6 +102,10 @@ const listarCommand = new SlashCommandBuilder()
     .setName('listar')
     .setDescription('Muestra todos los eventos guardados actualmente en el bot');
 
+const recuerdoCommand = new SlashCommandBuilder()
+    .setName('recuerdo')
+    .setDescription('Guarda un mensaje para recordarlo en su aniversario');
+
 client.once('ready', async () => {
     console.log(`¡Calendario-Bot conectado como ${client.user.tag}!`);
 
@@ -110,7 +114,8 @@ client.once('ready', async () => {
         console.log('Registrando comandos de barra (/) ...');
         await rest.put(
             Routes.applicationCommands(client.user.id),
-            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON()] },
+            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON(), recuerdoCommand.toJSON()] }
+            
         );
         console.log('¡Comandos de barra registrados al centavo! :v');
     } catch (error) {
@@ -232,13 +237,7 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
     
-    new SlashCommandBuilder()
-        .setName('recuerdo')
-        .setDescription('Guarda un mensaje para recordarlo en su aniversario')
-        .addStringOption(option => 
-            option.setName('mensaje_texto').setDescription('Texto del mensaje a recordar').setRequired(true))
-    
-if (commandName === 'recuerdo') {
+if (interaction.commandName === 'recuerdo') {
     // Obtenemos el mensaje al que le hicieron reply
     const targetMessage = interaction.options.getMessage('mensaje'); // o desde interaction.targetMessage si usas comandos de contexto
 
