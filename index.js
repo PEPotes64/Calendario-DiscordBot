@@ -1,6 +1,6 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder } = require('discord.js');
+const { Client, GatewayIntentBits, REST, Routes, SlashCommandBuilder, ContextMenuCommandBuilder, ApplicationCommandType } = require('discord.js');
 
 // Conexión a MongoDB (Lee la URL desde las variables de entorno de Render)
 const MONGO_URL = process.env.MONGO_URL;
@@ -103,9 +103,9 @@ const listarCommand = new SlashCommandBuilder()
     .setName('listar')
     .setDescription('Muestra todos los eventos guardados actualmente en el bot');
 
-const recuerdoCommand = new SlashCommandBuilder()
+const recuerdoCommand = new ContextMenuCommandBuilder()
     .setName('recuerdo')
-    .setDescription('Guarda un mensaje para recordarlo en su aniversario');
+    .setType(ApplicationCommandType.Message);
 
 client.once('ready', async () => {
     console.log(`¡Calendario-Bot conectado como ${client.user.tag}!`);
