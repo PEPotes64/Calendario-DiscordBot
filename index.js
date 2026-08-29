@@ -176,14 +176,16 @@ client.on('interactionCreate', async interaction => {
         const ano = fechaOriginal.getFullYear();
 
         try {
-            await Recuerdo.create({
-                content: targetMessage.content,
-                authorTag: targetMessage.author.tag,
-                channelId: targetMessage.channel.id,
-                dia: dia,
-                mes: mes,
-                ano: ano
-            });
+            await Evento.create({
+    nombre: targetMessage.content.substring(0, 50), // O el campo de nombre que prefieras
+    tipo: 'Recuerdo',
+    dia: dia,
+    mes: mes,
+    anio: ano,
+    hora: '12:00', // O la hora que extraigas del mensaje
+    creadoPor: targetMessage.author.tag,
+    avisado: false
+});
 
             return await interaction.editReply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v` });
         } catch (error) {
