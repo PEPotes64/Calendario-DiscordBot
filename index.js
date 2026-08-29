@@ -191,7 +191,6 @@ client.on('interactionCreate', async interaction => {
 
     await interaction.deferReply({ flags: 64 }).catch(() => {});
     
-        }
     }
 
     // Comando /listar
