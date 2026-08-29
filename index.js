@@ -84,6 +84,7 @@ const apuntarCommand = new SlashCommandBuilder()
     .addIntegerOption(option =>
         option.setName('anio')
             .setDescription('Año (Opcional)')
+        
             .setRequired(false))
     .addStringOption(option =>
         option.setName('hora')
@@ -158,10 +159,12 @@ function iniciarVerificadorFechas() {
 client.on('interactionCreate', async interaction => {
     // 1. Atrapamos primero el menú contextual de mensaje
     if (interaction.isMessageContextMenuCommand() && interaction.commandName === 'recuerdo') {
+        await interaction.deferReply({ ephemeral: true }).catch(() => {});
+
         const targetMessage = interaction.targetMessage;
 
         if (!targetMessage) {
-            return await interaction.reply({ content: '¡Tienes que seleccionar un mensaje, perro! > < :v', ephemeral: true });
+            return await interaction.editReply({ content: '¡Tienes que seleccionar un mensaje, perro! > < :v' });
         }
 
         const fechaOriginal = targetMessage.createdAt;
@@ -179,10 +182,10 @@ client.on('interactionCreate', async interaction => {
                 ano: ano
             });
 
-            return await interaction.reply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} 📆`, ephemeral: true });
+            return await interaction.editReply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v` });
         } catch (error) {
             console.error(error);
-            return await interaction.reply({ content: '¡exploto la base de datos al guardar el recuerdo😭🙏!', ephemeral: true });
+            return await interaction.editReply({ content: '¡exploto la base de datos al guardar el recuerdo💀!' });
         }
     }
 
@@ -190,6 +193,9 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     await interaction.deferReply({ flags: 64 }).catch(() => {});
+    
+    // ... aquí siguen tus otros comandos (/listar, /borrar, etc.)
+    
 
     // Comando /listar
     if (interaction.commandName === 'listar') {
