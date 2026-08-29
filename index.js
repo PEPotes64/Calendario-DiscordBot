@@ -231,7 +231,13 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.editReply('Error al intentar borrar el evento. 💀');
         }
     }
-
+    
+    new SlashCommandBuilder()
+        .setName('recuerdo')
+        .setDescription('Guarda un mensaje para recordarlo en su aniversario')
+        .addStringOption(option => 
+            option.setName('mensaje_texto').setDescription('Texto del mensaje a recordar').setRequired(true))
+    
 if (commandName === 'recuerdo') {
     // Obtenemos el mensaje al que le hicieron reply
     const targetMessage = interaction.options.getMessage('mensaje'); // o desde interaction.targetMessage si usas comandos de contexto
