@@ -107,6 +107,10 @@ const recuerdoCommand = new ContextMenuCommandBuilder()
     .setName('recuerdo')
     .setType(ApplicationCommandType.Message);
 
+const olvidarCommand = new ContextMenuCommandBuilder()
+    .setName('olvidar')
+    .setType(ApplicationCommandType.Message);
+
 client.once('ready', async () => {
     console.log(`¡Calendario-Bot conectado como ${client.user.tag}!`);
 
@@ -115,7 +119,7 @@ client.once('ready', async () => {
         console.log('Registrando comandos de barra (/) ...');
         await rest.put(
             Routes.applicationCommands(client.user.id),
-            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON(), recuerdoCommand.toJSON()] }
+            { body: [apuntarCommand.toJSON(), borrarCommand.toJSON(), listarCommand.toJSON(), recuerdoCommand.toJSON(), olvidarCommand.toJSON()] }
             
         );
         console.log('¡Comandos de barra registrados al centavo! :v');
@@ -193,6 +197,28 @@ client.on('interactionCreate', async interaction => {
             return await interaction.editReply({ content: '¡exploto la base de datos al guardar el recuerdo💀!' });
         }
     }
+    
+   if (interaction.commandName === 'olvidar') {
+    const targetMessage = interaction.targetMessage;
+    if (!targetMessage) {
+        return await interaction.reply({ content: '¡Selecciona un mensaje válido!', flags: 64 });
+    }
+
+    try {
+        const resultado = await Evento.findOneAndDelete({ 
+            nombre: { $regex: new RegExp(targetMessage.content.substring(0, 30), 'i') } 
+        });
+
+        if (resultado) {
+            return await interaction.reply({ content: `¡Evento o recuerdo "${resultado.nombre}" borrado con éxito del mapa! > < :v`, flags: 64 });
+        } else {
+            return await interaction.reply({ content: 'No encontré ningún registro en la base de datos que coincida con este mensaje :v', flags: 64 });
+        }
+    } catch (error) {
+        console.error('Error al borrar de mongo:', error);
+        return await interaction.reply({ content: '¡Exploto la base de datos al intentar olvidar el recuerdo💀!', flags: 64 });
+    }
+                }
     
     // 2. Filtro para los comandos de barra normales
     if (!interaction.isChatInputCommand()) return;
