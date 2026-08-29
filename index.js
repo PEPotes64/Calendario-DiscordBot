@@ -231,6 +231,40 @@ client.on('interactionCreate', async (interaction) => {
             await interaction.editReply('Error al intentar borrar el evento. 💀');
         }
     }
+
+if (commandName === 'recuerdo') {
+    // Obtenemos el mensaje al que le hicieron reply
+    const targetMessage = interaction.options.getMessage('mensaje'); // o desde interaction.targetMessage si usas comandos de contexto
+
+    if (!targetMessage) {
+        await interaction.reply({ content: '¡Tienes que responderle a un mensaje para guardarlo como recuerdo, prro! > < :v', flags: 64 });
+        return;
+    }
+
+    const fechaOriginal = targetMessage.createdAt; // Fecha en la que se mandó originalmente
+    const dia = fechaOriginal.getDate();
+    const mes = fechaOriginal.getMonth() + 1;
+    const ano = fechaOriginal.getFullYear();
+
+    await interaction.deferReply({ flags: 64 });
+
+    try {
+        await Recuerdo.create({
+            content: targetMessage.content,
+            authorTag: targetMessage.author.tag,
+            channelId: targetMessage.channel.id,
+            dia: dia,
+            mes: mes,
+            ano: ano
+        });
+
+        await interaction.editReply(`¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v`);
+    } catch (error) {
+        console.error(error);
+        await interaction.editReply('¡Chale, tronó la base de datos al guardar el recuerdo! > < :v');
+    }
+}
+    
 });
 
 client.login(process.env.DISCORD_TOKEN);
