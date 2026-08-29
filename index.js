@@ -243,15 +243,12 @@ const recuerdoCommand = new ContextMenuCommandBuilder()
     .setName('recuerdo')
     .setType(ApplicationCommandType.Message);
 
-    if (interaction.commandName === 'recuerdo') {
+if (interaction.commandName === 'recuerdo') {
     const targetMessage = interaction.targetMessage;
 
     if (!targetMessage) {
         return await interaction.reply({ content: '¡Tienes que seleccionar un mensaje, perro! > < :v', ephemeral: true });
     }
-
-    // Respondemos de una vez para que Discord no se quede pensando
-    await interaction.reply({ content: 'Guardando el recuerdo en la base de datos... > < :v', ephemeral: true });
 
     const fechaOriginal = targetMessage.createdAt;
     const dia = fechaOriginal.getDate();
@@ -268,15 +265,14 @@ const recuerdoCommand = new ContextMenuCommandBuilder()
             ano: ano
         });
 
-        // Editamos el mensaje que ya mandamos
-        await interaction.editReply(`¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v`);
+        // Respondemos de un solo trago aquí para evitar duplicados
+        await interaction.reply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v`, ephemeral: true });
     } catch (error) {
         console.error(error);
-        await interaction.editReply('¡Chale, tronó la base de datos al guardar el recuerdo! > < :v');
+        await interaction.reply({ content: '¡Chale, tronó la base de datos al guardar el recuerdo! > < :v', ephemeral: true });
     }
-    }
-    
-    
+}
+      
 });
 
 client.login(process.env.DISCORD_TOKEN);
