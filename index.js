@@ -155,39 +155,42 @@ function iniciarVerificadorFechas() {
     }, 30000);
 }
 
-client.on('interactionCreate', async (interaction) => {
+client.on('interactionCreate', async interaction => {
+    // 1. Atrapamos primero el menú contextual de mensaje
+    if (interaction.isMessageContextMenuCommand() && interaction.commandName === 'recuerdo') {
+        const targetMessage = interaction.targetMessage;
+
+        if (!targetMessage) {
+            return await interaction.reply({ content: '¡Tienes que seleccionar un mensaje, perro! > < :v', ephemeral: true });
+        }
+
+        const fechaOriginal = targetMessage.createdAt;
+        const dia = fechaOriginal.getDate();
+        const mes = fechaOriginal.getMonth() + 1;
+        const ano = fechaOriginal.getFullYear();
+
+        try {
+            await Recuerdo.create({
+                content: targetMessage.content,
+                authorTag: targetMessage.author.tag,
+                channelId: targetMessage.channel.id,
+                dia: dia,
+                mes: mes,
+                ano: ano
+            });
+
+            return await interaction.reply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} 📆`, ephemeral: true });
+        } catch (error) {
+            console.error(error);
+            return await interaction.reply({ content: '¡exploto la base de datos al guardar el recuerdo😭🙏!', ephemeral: true });
+        }
+    }
+
+    // 2. Filtro para los comandos de barra normales
     if (!interaction.isChatInputCommand()) return;
 
     await interaction.deferReply({ flags: 64 }).catch(() => {});
-
-    // Comando /apuntar
-    if (interaction.commandName === 'apuntar') {
-        const nombre = interaction.options.getString('nombre');
-        const tipo = interaction.options.getString('tipo');
-        const dia = interaction.options.getInteger('dia');
-        const mes = interaction.options.getInteger('mes');
-        const anio = interaction.options.getInteger('anio') || null;
-        const hora = interaction.options.getString('hora') || '08:00';
-        const autor = interaction.user.tag;
-
-        try {
-            const nuevoEvento = new Evento({
-                nombre,
-                tipo,
-                dia,
-                mes,
-                anio,
-                hora,
-                creadoPor: autor,
-                avisado: false
-            });
-
-            await nuevoEvento.save();
-
-            await interaction.editReply(`¡Anotado y guardado en la nube! Evento **"${nombre}"** [**${tipo}**] para el ${dia}/${mes}/${anio ? anio : 'Sin año'} a las ${hora}. > < :v`);
-        } catch (e) {
-            console.error(e);
-            await interaction.editReply('Hubo un error al guardar el evento en la base de datos. 💀');
+    
         }
     }
 
@@ -237,42 +240,6 @@ client.on('interactionCreate', async (interaction) => {
         }
     }
     
-const { ContextMenuCommandBuilder, ApplicationCommandType } = require('discord.js');
-
-const recuerdoCommand = new ContextMenuCommandBuilder()
-    .setName('recuerdo')
-    .setType(ApplicationCommandType.Message);
-
-if (interaction.commandName === 'recuerdo') {
-    const targetMessage = interaction.targetMessage;
-
-    if (!targetMessage) {
-        return await interaction.reply({ content: '¡Tienes que seleccionar un mensaje, perro! > < :v', ephemeral: true });
-    }
-
-    const fechaOriginal = targetMessage.createdAt;
-    const dia = fechaOriginal.getDate();
-    const mes = fechaOriginal.getMonth() + 1;
-    const ano = fechaOriginal.getFullYear();
-
-    try {
-        await Recuerdo.create({
-            content: targetMessage.content,
-            authorTag: targetMessage.author.tag,
-            channelId: targetMessage.channel.id,
-            dia: dia,
-            mes: mes,
-            ano: ano
-        });
-
-        // Respondemos de un solo trago aquí para evitar duplicados
-        await interaction.reply({ content: `¡Recuerdo guardado con éxito! Te lo recordaré cada ${dia}/${mes} > < :v`, ephemeral: true });
-    } catch (error) {
-        console.error(error);
-        await interaction.reply({ content: '¡Chale, tronó la base de datos al guardar el recuerdo! > < :v', ephemeral: true });
-    }
-}
-      
 });
 
 client.login(process.env.DISCORD_TOKEN);
