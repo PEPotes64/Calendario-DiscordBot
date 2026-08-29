@@ -190,8 +190,6 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     await interaction.deferReply({ flags: 64 }).catch(() => {});
-    
-    }
 
     // Comando /listar
     if (interaction.commandName === 'listar') {
